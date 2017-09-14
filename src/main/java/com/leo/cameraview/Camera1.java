@@ -41,7 +41,6 @@ final class Camera1 extends CameraViewImpl {
     private boolean mTargetStartPreview;
     private DrawView mDrawView;
 
-
     private static final int INVALID_CAMERA_ID = -1;
 
     Camera1(Callback callback, PreviewImpl preview) {
@@ -95,6 +94,11 @@ final class Camera1 extends CameraViewImpl {
     @Override
     boolean isCameraOpened() {
         return mCamera != null;
+    }
+
+    @Override
+    boolean isShowingPreview() {
+        return mShowingPreview;
     }
 
     @Override
