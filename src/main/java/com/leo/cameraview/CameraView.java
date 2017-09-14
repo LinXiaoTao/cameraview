@@ -137,6 +137,10 @@ public class CameraView extends FrameLayout {
         return mImpl.isCameraOpened();
     }
 
+    public boolean isShowingPreview() {
+        return mImpl.isShowingPreview();
+    }
+
     public void addCallback(Callback callback) {
         mCallbacks.add(callback);
     }
