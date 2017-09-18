@@ -9,6 +9,7 @@ import android.support.annotation.IntDef;
 import android.support.v4.os.ParcelableCompat;
 import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.ViewCompat;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.widget.FrameLayout;
 
@@ -17,6 +18,7 @@ import com.leo.cameraview.utils.DisplayOrientationDetector;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * Created on 2017/9/9 上午11:28.
@@ -36,6 +38,7 @@ public class CameraView extends FrameLayout {
     private CameraViewImpl mImpl;
     private final CallbackBridge mCallbacks;
     private final DisplayOrientationDetector mDisplayOrientationDetector;
+    private boolean mAdjustViewBounds;
 
     public CameraView(Context context) {
         this(context, null);
@@ -61,8 +64,15 @@ public class CameraView extends FrameLayout {
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.CameraView, defStyle, 0);
         setFacing(a.getInt(R.styleable.CameraView_facing, FACING_BACK));
+        String aspectRatio = a.getString(R.styleable.CameraView_aspectRatio);
+        if (!TextUtils.isEmpty(aspectRatio)) {
+            setAspectRatio(AspectRatio.parse(aspectRatio));
+        } else {
+            setAspectRatio(Constants.DEFAULT_ASPECT_RATIO);
+        }
         setAutoFocus(a.getBoolean(R.styleable.CameraView_autoFocus, false));
         setTouchFocus(a.getBoolean(R.styleable.CameraView_touchFocus, false));
+        mAdjustViewBounds = a.getBoolean(R.styleable.CameraView_adjustViewBounds, false);
         a.recycle();
 
         mDisplayOrientationDetector = new DisplayOrientationDetector(context) {
@@ -108,6 +118,57 @@ public class CameraView extends FrameLayout {
         setAutoFocus(savedState.autoFocus);
     }
 
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (isInEditMode()) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
+        if (mAdjustViewBounds) {
+            if (!isCameraOpened()) {
+                mCallbacks.reserveRequestLayoutOnOpen();
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                return;
+            }
+            final int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+            final int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+            if (widthMode == MeasureSpec.EXACTLY && heightMode != MeasureSpec.EXACTLY) {
+                final AspectRatio ratio = getAspectRatio();
+                int height = (int) (MeasureSpec.getSize(widthMeasureSpec) * ratio.toFloat());
+                if (heightMode == MeasureSpec.AT_MOST) {
+                    height = Math.min(height, MeasureSpec.getSize(heightMeasureSpec));
+                }
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+            } else if (widthMode != MeasureSpec.EXACTLY && heightMode == MeasureSpec.EXACTLY) {
+                final AspectRatio ratio = getAspectRatio();
+                int width = (int) (MeasureSpec.getSize(heightMeasureSpec) * ratio.toFloat());
+                if (widthMode == MeasureSpec.AT_MOST) {
+                    width = Math.min(width, MeasureSpec.getSize(widthMeasureSpec));
+                }
+                super.onMeasure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), heightMeasureSpec);
+            } else {
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
+        } else {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        }
+
+        int width = getMeasuredWidth();
+        int height = getMeasuredHeight();
+        AspectRatio ratio = getAspectRatio();
+        if (mDisplayOrientationDetector.getLastKnownDisplayOrientation() % 180 == 0) {
+            ratio = ratio.inverse();
+        }
+        if (height < width * ratio.getY() / ratio.getX()) {
+            mImpl.getView().measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+                    , MeasureSpec.makeMeasureSpec(width * ratio.getY() / ratio.getX(), MeasureSpec.EXACTLY));
+        } else {
+            mImpl.getView().measure(MeasureSpec.makeMeasureSpec(height * ratio.getX() / ratio.getY(), MeasureSpec.EXACTLY)
+                    , MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+        }
+
+    }
+
     public void start() {
         post(new Runnable() {
             @Override
@@ -132,6 +193,11 @@ public class CameraView extends FrameLayout {
         });
         mImpl.stop();
     }
+
+    public void takePicture() {
+        mImpl.takePicture();
+    }
+
 
     public boolean isCameraOpened() {
         return mImpl.isCameraOpened();
@@ -166,8 +232,28 @@ public class CameraView extends FrameLayout {
         return mImpl.getAutoFocus();
     }
 
-    public void setPreviewSize(int width, int height) {
-        mImpl.setPreviewSize(width, height);
+    public void setPreviewSize(Size previewSize) {
+        mImpl.setPreviewSize(previewSize);
+    }
+
+    public Size getPreviewSize() {
+        return mImpl.getPreviewSize();
+    }
+
+    public void setPictureSize(Size pictureSize) {
+        mImpl.setPictureSize(pictureSize);
+    }
+
+    public boolean setAspectRatio(AspectRatio ratio) {
+        return mImpl.setAspectRatio(ratio);
+    }
+
+    public AspectRatio getAspectRatio() {
+        return mImpl.getAspectRatio();
+    }
+
+    public Set<AspectRatio> getSupportedAspectRatios() {
+        return mImpl.getSupportedAspectRatios();
     }
 
     public void setPreviewFormat(int pixel_format) {
@@ -180,6 +266,15 @@ public class CameraView extends FrameLayout {
 
     public void setTouchFocus(boolean touchFocus) {
         mImpl.setTouchFocus(touchFocus);
+    }
+
+    public CameraView setAdjustViewBounds(boolean adjustViewBounds) {
+        if (mAdjustViewBounds == adjustViewBounds) {
+            return this;
+        }
+        mAdjustViewBounds = adjustViewBounds;
+        requestLayout();
+        return this;
     }
 
     protected static class SavedState extends BaseSavedState {
@@ -225,11 +320,12 @@ public class CameraView extends FrameLayout {
 
     private PreviewImpl createPreviewImpl(Context context) {
         PreviewImpl preview;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-            preview = new SurfaceViewPreview(context, this);
-        } else {
-            preview = new TextureViewPreview(context, this);
-        }
+        preview = new SurfaceViewPreview(context, this);
+//        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+//            preview = new SurfaceViewPreview(context, this);
+//        } else {
+//            preview = new TextureViewPreview(context, this);
+//        }
         return preview;
     }
 
@@ -287,6 +383,17 @@ public class CameraView extends FrameLayout {
                 callback.onPreviewFrame(CameraView.this, data);
             }
         }
+
+        @Override
+        public void onPictureTaken(byte[] data) {
+            for (Callback callback : mCallbacks) {
+                callback.onPictureTaken(CameraView.this, data);
+            }
+        }
+
+        public void reserveRequestLayoutOnOpen() {
+            mRequestLayoutOnOpen = true;
+        }
     }
 
     public abstract static class Callback {
@@ -309,6 +416,10 @@ public class CameraView extends FrameLayout {
         }
 
         public void onStopPreview(CameraView cameraView) {
+
+        }
+
+        public void onPictureTaken(CameraView cameraView, byte[] data) {
 
         }
 

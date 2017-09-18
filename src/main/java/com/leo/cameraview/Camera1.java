@@ -13,6 +13,10 @@ import android.view.ViewGroup;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created on 2017/9/9 下午2:47.
@@ -34,12 +38,21 @@ final class Camera1 extends CameraViewImpl {
     private boolean mTouchFocus;
     private Camera.AutoFocusCallback mAutoFocusCallback;
     /** 摄像头预览帧数据尺寸 */
-    private int mPreviewWidth, mPreviewHeight;
+    private Size mPreviewSize;
+    /** 摄像头图像数据尺寸 */
+    private Size mPictureSize;
     /** 摄像头预览帧数据格式 */
     private int mPixelFormat;
     private int mDisplayOrientation;
     private boolean mTargetStartPreview;
     private DrawView mDrawView;
+    private final AtomicBoolean isPictureCaptureInProgress = new AtomicBoolean(false);
+    /** 支持的预览宽高比例 */
+    private final SizeMap mPreviewSizes = new SizeMap();
+    /** 支持的图像宽高比例 */
+    private final SizeMap mPictureSizes = new SizeMap();
+    /** 预览数据的宽高比例 */
+    private AspectRatio mAspectRatio;
 
     private static final int INVALID_CAMERA_ID = -1;
 
@@ -49,9 +62,9 @@ final class Camera1 extends CameraViewImpl {
             @Override
             public void onSurfaceChanged() {
                 if (mCamera != null) {
-                    setUpPreview();
                     adjustCameraParameters();
                     if (mTargetStartPreview && !mShowingPreview) {
+                        setUpPreview();
                         mTargetStartPreview = false;
                         mShowingPreview = true;
                         mCamera.startPreview();
@@ -89,6 +102,24 @@ final class Camera1 extends CameraViewImpl {
         }
         mShowingPreview = false;
         releaseCamera();
+    }
+
+    @Override
+    void takePicture() {
+        if (!isCameraOpened()) {
+            return;
+        }
+        if (getAutoFocus()) {
+            mCamera.cancelAutoFocus();
+            mCamera.autoFocus(new Camera.AutoFocusCallback() {
+                @Override
+                public void onAutoFocus(boolean success, Camera camera) {
+                    takePictureInternal();
+                }
+            });
+        } else {
+            takePictureInternal();
+        }
     }
 
     @Override
@@ -144,6 +175,7 @@ final class Camera1 extends CameraViewImpl {
 
     @Override
     void setTouchFocus(boolean touchFocus) {
+        // TODO: 2017/9/15 待完善
         if (mTouchFocus == touchFocus) {
             return;
         }
@@ -161,6 +193,8 @@ final class Camera1 extends CameraViewImpl {
         }
         mDisplayOrientation = displayOrientation;
         if (isCameraOpened()) {
+            mCameraParameters.setRotation(calcCameraRotation(displayOrientation));
+            mCamera.setParameters(mCameraParameters);
             final boolean needsToStopPreview = mShowingPreview && Build.VERSION.SDK_INT < 14;
             if (needsToStopPreview) {
                 mCamera.stopPreview();
@@ -173,18 +207,18 @@ final class Camera1 extends CameraViewImpl {
     }
 
     @Override
-    void setPreviewSize(int width, int height) {
+    void setPreviewSize(Size previewSize) {
 
-        if (mPreviewWidth == width && mPreviewHeight == height) {
+        if (mPreviewSize != null && mPreviewSize.equals(previewSize)) {
             return;
         }
-        mPreviewWidth = width;
-        mPreviewHeight = height;
-        if (isCameraOpened()) {
+
+        mPreviewSize = previewSize;
+        if (isCameraOpened() && mPreviewSize != null) {
             if (mShowingPreview) {
                 mCamera.stopPreview();
             }
-            mCameraParameters.setPreviewSize(width, height);
+            mCameraParameters.setPreviewSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
             mCamera.setParameters(mCameraParameters);
             if (mShowingPreview) {
                 mCamera.startPreview();
@@ -192,6 +226,65 @@ final class Camera1 extends CameraViewImpl {
         }
 
 
+    }
+
+    @Override
+    Size getPreviewSize() {
+        return mPreviewSize;
+    }
+
+    @Override
+    void setPictureSize(Size pictureSize) {
+        if (mPictureSize != null && mPictureSize.equals(pictureSize)) {
+            return;
+        }
+        mPictureSize = pictureSize;
+        if (isCameraOpened() && mPictureSize != null) {
+            if (mShowingPreview) {
+                mCamera.stopPreview();
+            }
+            mCameraParameters.setPictureSize(mPictureSize.getWidth(), mPictureSize.getHeight());
+            mCamera.setParameters(mCameraParameters);
+            if (mShowingPreview) {
+                mCamera.startPreview();
+            }
+        }
+
+    }
+
+    @Override
+    boolean setAspectRatio(AspectRatio ratio) {
+        if (mAspectRatio == null || !isCameraOpened()) {
+            mAspectRatio = ratio;
+            return true;
+        } else if (!mAspectRatio.equals(ratio)) {
+            final Set<Size> sizes = mPreviewSizes.sizes(ratio);
+            if (sizes == null) {
+                throw new UnsupportedOperationException(ratio + " is not supported");
+            } else {
+                mAspectRatio = ratio;
+                adjustCameraParameters();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    @Override
+    AspectRatio getAspectRatio() {
+        return mAspectRatio;
+    }
+
+    @Override
+    Set<AspectRatio> getSupportedAspectRatios() {
+        SizeMap idealAspectRatios = mPreviewSizes;
+        for (AspectRatio aspectRatio : idealAspectRatios.ratios()) {
+            if (mPictureSizes.sizes(aspectRatio) == null) {
+                idealAspectRatios.remove(aspectRatio);
+            }
+        }
+        return idealAspectRatios.ratios();
     }
 
     @Override
@@ -244,17 +337,71 @@ final class Camera1 extends CameraViewImpl {
         }
     }
 
+    private AspectRatio chooseAspectRatio() {
+        AspectRatio r = null;
+        for (AspectRatio ratio : mPreviewSizes.ratios()) {
+            r = ratio;
+            if (ratio.equals(Constants.DEFAULT_ASPECT_RATIO)) {
+                return ratio;
+            }
+        }
+        return r;
+    }
+
     private void adjustCameraParameters() {
+        Size previewSize = mPreviewSize;
+        if (mPreviewSize == null) {
+            SortedSet<Size> sizes = mPreviewSizes.sizes(mAspectRatio);
+            if (sizes == null) {
+                mAspectRatio = chooseAspectRatio();
+                sizes = mPreviewSizes.sizes(mAspectRatio);
+            }
+            previewSize = chooseOptimalSize(sizes);
+        }
+        Size pictureSize = mPictureSize;
+        if (mPictureSize == null) {
+            //largest picture size
+            pictureSize = mPictureSizes.sizes(mAspectRatio).last();
+        }
         if (mShowingPreview) {
             mCamera.stopPreview();
         }
+        mCameraParameters.setPreviewSize(previewSize.getWidth(), previewSize.getHeight());
+        mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+        mCameraParameters.setRotation(calcCameraRotation(mDisplayOrientation));
         setAutoFocusInternal(mAutoFocus);
         setTouchFocusInternal(mTouchFocus);
-        setPreviewInternal();
         mCamera.setParameters(mCameraParameters);
         if (mShowingPreview) {
             mCamera.startPreview();
         }
+    }
+
+    @SuppressWarnings("SuspiciousNameCombination")
+    private Size chooseOptimalSize(SortedSet<Size> sizes) {
+        if (!mPreview.isReady()) {
+            //return the smallest size
+            return sizes.first();
+        }
+        int desiredWidth;
+        int desiredHeight;
+        final int surfaceWidth = mPreview.getWidth();
+        final int surfaceHeight = mPreview.getHeight();
+        if (isLandscape(mDisplayOrientation)) {
+            desiredWidth = surfaceHeight;
+            desiredHeight = surfaceWidth;
+        } else {
+            desiredWidth = surfaceWidth;
+            desiredHeight = surfaceHeight;
+        }
+        Size result = null;
+        for (Size size : sizes) {
+            if (desiredWidth <= size.getWidth() && desiredHeight <= size.getHeight()) {
+                return size;
+            }
+            result = size;
+        }
+        return result;
     }
 
     private void chooseCamera() {
@@ -276,13 +423,26 @@ final class Camera1 extends CameraViewImpl {
             return;
         }
         mCamera = Camera.open(mCameraId);
+        mCameraParameters = mCamera.getParameters();
+        //supprted preview sizes
+        mPreviewSizes.clear();
+        for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {
+            mPreviewSizes.add(new Size(size.width, size.height));
+        }
+        //supprted picture sizes
+        mPictureSizes.clear();
+        for (Camera.Size size : mCameraParameters.getSupportedPictureSizes()) {
+            mPictureSizes.add(new Size(size.width, size.height));
+        }
+        if (mAspectRatio == null) {
+            mAspectRatio = Constants.DEFAULT_ASPECT_RATIO;
+        }
         mCamera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] data, Camera camera) {
                 mCallback.onPreviewFrame(data);
             }
         });
-        mCameraParameters = mCamera.getParameters();
         adjustCameraParameters();
         mCamera.setDisplayOrientation(calcDisplayOrientation(mDisplayOrientation));
         mCallback.onCameraOpened();
@@ -297,12 +457,33 @@ final class Camera1 extends CameraViewImpl {
         }
     }
 
-    private int calcDisplayOrientation(int screenOrientationDegrees) {
+    private int calcCameraRotation(int screenOrientationDegrees) {
+        int result = 0;
         if (mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            return (360 - (mCameraInfo.orientation + screenOrientationDegrees) % 360) % 360;
-        } else {  // back-facing
-            return (mCameraInfo.orientation - screenOrientationDegrees + 360) % 360;
+            result = (mCameraInfo.orientation + screenOrientationDegrees) % 360;
+        } else {
+            final int landscapeFlip = isLandscape(screenOrientationDegrees) ? 180 : 0;
+            result = (mCameraInfo.orientation + screenOrientationDegrees + landscapeFlip) % 360;
         }
+        System.out.println(String.format(Locale.getDefault(), "screenOrientationDegrees：%d;calcCameraRotation：%d"
+                , screenOrientationDegrees, result));
+        return result;
+    }
+
+    private boolean isLandscape(int screenOrientationDegrees) {
+        return (screenOrientationDegrees == Constants.LANDSCAPE_90 || screenOrientationDegrees == Constants.LANDSCAPE_270);
+    }
+
+    private int calcDisplayOrientation(int screenOrientationDegrees) {
+        int result = 0;
+        if (mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            result = (360 - (mCameraInfo.orientation + screenOrientationDegrees) % 360) % 360;
+        } else {  // back-facing
+            result = (mCameraInfo.orientation - screenOrientationDegrees + 360) % 360;
+        }
+        System.out.println(String.format(Locale.getDefault(), "screenOrientationDegrees：%d;calcDisplayOrientation：%d"
+                , screenOrientationDegrees, result));
+        return result;
     }
 
     private boolean setAutoFocusInternal(boolean autoFocus) {
@@ -386,22 +567,6 @@ final class Camera1 extends CameraViewImpl {
         return false;
     }
 
-    private void setPreviewInternal() {
-        if (isCameraOpened()) {
-            if (mShowingPreview) {
-                mCamera.stopPreview();
-            }
-            if (mPixelFormat != 0) {
-                mCameraParameters.setPreviewFormat(mPixelFormat);
-            }
-            if (mPreviewWidth != 0 && mPreviewHeight != 0) {
-                mCameraParameters.setPreviewSize(mPreviewWidth, mPreviewHeight);
-            }
-            if (mShowingPreview) {
-                mCamera.startPreview();
-            }
-        }
-    }
 
     private int clamp(int x) {
         if (x > 1000) {
@@ -411,6 +576,20 @@ final class Camera1 extends CameraViewImpl {
             return -1000;
         }
         return x;
+    }
+
+    private void takePictureInternal() {
+        if (!isPictureCaptureInProgress.getAndSet(true)) {
+            mCamera.takePicture(null, null, null, new Camera.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] data, Camera camera) {
+                    mCallback.onPictureTaken(data);
+                    isPictureCaptureInProgress.set(false);
+                    camera.cancelAutoFocus();
+                    camera.startPreview();
+                }
+            });
+        }
     }
 
 }

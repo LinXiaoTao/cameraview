@@ -3,6 +3,8 @@ package com.leo.cameraview;
 import android.view.View;
 import android.view.ViewGroup;
 
+import java.util.Set;
+
 /**
  * Created on 2017/9/9 上午11:39.
  * leo linxiaotao1993@vip.qq.com
@@ -37,6 +39,8 @@ abstract class CameraViewImpl {
 
     abstract void stop();
 
+    abstract void takePicture();
+
     abstract boolean isCameraOpened();
 
     abstract boolean isShowingPreview();
@@ -55,7 +59,17 @@ abstract class CameraViewImpl {
 
     abstract void setDisplayOrientation(int displayOrientation);
 
-    abstract void setPreviewSize(int width, int height);
+    abstract void setPreviewSize(Size previewSize);
+
+    abstract Size getPreviewSize();
+
+    abstract void setPictureSize(Size pictureSize);
+
+    abstract boolean setAspectRatio(AspectRatio ratio);
+
+    abstract AspectRatio getAspectRatio();
+
+    abstract Set<AspectRatio> getSupportedAspectRatios();
 
     abstract void setPreviewFormat(int pixel_format);
 
@@ -82,6 +96,7 @@ abstract class CameraViewImpl {
 
         void onPreviewFrame(byte[] data);
 
+        void onPictureTaken(byte[] data);
     }
 
 }

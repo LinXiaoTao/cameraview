@@ -31,7 +31,6 @@ final class SurfaceViewPreview extends PreviewImpl {
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
                 setSize(width, height);
-                // TODO: 2017/9/9 可能会调用多次
                 if (!ViewCompat.isInLayout(mSurfaceView)) {
                     dispatchSurfaceChanged();
                 }
