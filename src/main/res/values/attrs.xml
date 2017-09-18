@@ -7,5 +7,6 @@
         <attr name="touchFocus" format="boolean"/>
         <attr name="adjustViewBounds" format="boolean"/>
         <attr name="aspectRatio" format="string"/>
+        <attr name="flash" format="integer"/>
     </declare-styleable>
 </resources>

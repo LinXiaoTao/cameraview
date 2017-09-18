@@ -4,6 +4,7 @@ import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Build;
+import android.support.v4.util.SparseArrayCompat;
 import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
@@ -43,6 +44,7 @@ final class Camera1 extends CameraViewImpl {
     private Size mPictureSize;
     /** 摄像头预览帧数据格式 */
     private int mPixelFormat;
+    private int mFlash;
     private int mDisplayOrientation;
     private boolean mTargetStartPreview;
     private DrawView mDrawView;
@@ -55,6 +57,16 @@ final class Camera1 extends CameraViewImpl {
     private AspectRatio mAspectRatio;
 
     private static final int INVALID_CAMERA_ID = -1;
+
+    private static final SparseArrayCompat<String> FLASH_MODES = new SparseArrayCompat<>();
+
+    static {
+        FLASH_MODES.put(Constants.FLASH_OFF, Camera.Parameters.FLASH_MODE_OFF);
+        FLASH_MODES.put(Constants.FLASH_ON, Camera.Parameters.FLASH_MODE_ON);
+        FLASH_MODES.put(Constants.FLASH_TORCH, Camera.Parameters.FLASH_MODE_TORCH);
+        FLASH_MODES.put(Constants.FLASH_AUTO, Camera.Parameters.FLASH_MODE_AUTO);
+        FLASH_MODES.put(Constants.FLASH_RED_EYE, Camera.Parameters.FLASH_MODE_RED_EYE);
+    }
 
     Camera1(Callback callback, PreviewImpl preview) {
         super(callback, preview);
@@ -184,6 +196,21 @@ final class Camera1 extends CameraViewImpl {
             mCamera.setParameters(mCameraParameters);
         }
 
+    }
+
+    @Override
+    void setFlash(int flash) {
+        if (flash == mFlash) {
+            return;
+        }
+        if (setFlashInternal(flash)) {
+            mCamera.setParameters(mCameraParameters);
+        }
+    }
+
+    @Override
+    int getFlash() {
+        return mFlash;
     }
 
     @Override
@@ -370,6 +397,7 @@ final class Camera1 extends CameraViewImpl {
         mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
         mCameraParameters.setRotation(calcCameraRotation(mDisplayOrientation));
         setAutoFocusInternal(mAutoFocus);
+        setFlashInternal(mFlash);
         setTouchFocusInternal(mTouchFocus);
         mCamera.setParameters(mCameraParameters);
         if (mShowingPreview) {
@@ -530,7 +558,13 @@ final class Camera1 extends CameraViewImpl {
             preview.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
-                    if (!mTouchFocus) {
+                    if (!mTouchFocus || !isCameraOpened()) {
+                        return false;
+                    }
+                    //check
+                    int maxNumFocusAreas = mCameraParameters.getMaxNumFocusAreas();
+                    int maxNumMeteringAreas = mCameraParameters.getMaxNumMeteringAreas();
+                    if (maxNumFocusAreas == 0 && maxNumMeteringAreas == 0) {
                         return false;
                     }
                     if (event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -550,8 +584,13 @@ final class Camera1 extends CameraViewImpl {
                         targetRect.top = clamp(touchRect.top * 2000 / mPreview.getHeight() - 1000);
                         targetRect.bottom = clamp(touchRect.bottom * 2000 / mPreview.getHeight() - 1000);
                         //配置焦点区域
-                        mCameraParameters.setFocusAreas(Collections.singletonList(new Camera.Area(targetRect, 1000)));
-                        mCameraParameters.setMeteringAreas(Collections.singletonList(new Camera.Area(targetRect, 1000)));
+                        if (maxNumFocusAreas > 0) {
+                            mCameraParameters.setFocusAreas(Collections.singletonList(new Camera.Area(targetRect, 1000)));
+                        }
+                        if (maxNumMeteringAreas > 0) {
+                            mCameraParameters.setMeteringAreas(Collections.singletonList(new Camera.Area(targetRect, 1000)));
+                        }
+                        System.out.println("Focus Areas Rect：" + targetRect.toShortString());
                         mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
                         mCamera.setParameters(mCameraParameters);
                         mCamera.autoFocus(mAutoFocusCallback);
@@ -589,6 +628,28 @@ final class Camera1 extends CameraViewImpl {
                     camera.startPreview();
                 }
             });
+        }
+    }
+
+    private boolean setFlashInternal(int flash) {
+        if (isCameraOpened()) {
+            List<String> modes = mCameraParameters.getSupportedFlashModes();
+            String mode = FLASH_MODES.get(flash);
+            if (modes != null && modes.contains(mode)) {
+                mCameraParameters.setFlashMode(mode);
+                mFlash = flash;
+                return true;
+            }
+            String currentMode = FLASH_MODES.get(mFacing);
+            if (modes == null || !modes.contains(currentMode)) {
+                mCameraParameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                mFlash = Constants.FLASH_OFF;
+                return true;
+            }
+            return false;
+        } else {
+            mFlash = flash;
+            return false;
         }
     }
 

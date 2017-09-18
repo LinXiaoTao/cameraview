@@ -57,6 +57,10 @@ abstract class CameraViewImpl {
 
     abstract void setTouchFocus(boolean touchFocus);
 
+    abstract void setFlash(int flash);
+
+    abstract int getFlash();
+
     abstract void setDisplayOrientation(int displayOrientation);
 
     abstract void setPreviewSize(Size previewSize);

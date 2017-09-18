@@ -35,6 +35,26 @@ public class CameraView extends FrameLayout {
     public @interface Facing {
     }
 
+    /** Flash will not be fired. */
+    public static final int FLASH_OFF = Constants.FLASH_OFF;
+
+    /** Flash will always be fired during snapshot. */
+    public static final int FLASH_ON = Constants.FLASH_ON;
+
+    /** Constant emission of light during preview, auto-focus and snapshot. */
+    public static final int FLASH_TORCH = Constants.FLASH_TORCH;
+
+    /** Flash will be fired automatically when required. */
+    public static final int FLASH_AUTO = Constants.FLASH_AUTO;
+
+    /** Flash will be fired in red-eye reduction mode. */
+    public static final int FLASH_RED_EYE = Constants.FLASH_RED_EYE;
+
+    /** The mode for for the camera device's flash control */
+    @IntDef({FLASH_OFF, FLASH_ON, FLASH_TORCH, FLASH_AUTO, FLASH_RED_EYE})
+    public @interface Flash {
+    }
+
     private CameraViewImpl mImpl;
     private final CallbackBridge mCallbacks;
     private final DisplayOrientationDetector mDisplayOrientationDetector;
@@ -72,6 +92,7 @@ public class CameraView extends FrameLayout {
         }
         setAutoFocus(a.getBoolean(R.styleable.CameraView_autoFocus, false));
         setTouchFocus(a.getBoolean(R.styleable.CameraView_touchFocus, false));
+        setFlash(a.getInt(R.styleable.CameraView_flash, Constants.FLASH_AUTO));
         mAdjustViewBounds = a.getBoolean(R.styleable.CameraView_adjustViewBounds, false);
         a.recycle();
 
@@ -268,6 +289,15 @@ public class CameraView extends FrameLayout {
         mImpl.setTouchFocus(touchFocus);
     }
 
+    public void setFlash(@Flash int flash) {
+        mImpl.setFlash(flash);
+    }
+
+    @Flash
+    public int getFlash() {
+        return mImpl.getFlash();
+    }
+
     public CameraView setAdjustViewBounds(boolean adjustViewBounds) {
         if (mAdjustViewBounds == adjustViewBounds) {
             return this;
@@ -281,7 +311,13 @@ public class CameraView extends FrameLayout {
 
         @Facing
         int facing;
+
         boolean autoFocus;
+
+        AspectRatio ration;
+
+        @Flash
+        int flash;
 
         @SuppressWarnings("WrongConstant")
         public SavedState(Parcel source) {
@@ -320,12 +356,11 @@ public class CameraView extends FrameLayout {
 
     private PreviewImpl createPreviewImpl(Context context) {
         PreviewImpl preview;
-        preview = new SurfaceViewPreview(context, this);
-//        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-//            preview = new SurfaceViewPreview(context, this);
-//        } else {
-//            preview = new TextureViewPreview(context, this);
-//        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+            preview = new SurfaceViewPreview(context, this);
+        } else {
+            preview = new TextureViewPreview(context, this);
+        }
         return preview;
     }
 
