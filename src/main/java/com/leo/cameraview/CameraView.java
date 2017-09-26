@@ -11,6 +11,8 @@ import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.ViewCompat;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import com.leo.cameraview.utils.DisplayOrientationDetector;
@@ -291,6 +293,12 @@ public class CameraView extends FrameLayout {
 
     public void setFlash(@Flash int flash) {
         mImpl.setFlash(flash);
+    }
+
+    public void addDrawView(View drawView) {
+        ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        addView(drawView, layoutParams);
     }
 
     @Flash
