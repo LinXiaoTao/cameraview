@@ -217,9 +217,24 @@ public class CameraView extends FrameLayout {
         mImpl.stop();
     }
 
-    public void stopWithOutGone() {
-        mImpl.stop();
+    public void show(){
+        post(new Runnable() {
+            @Override
+            public void run() {
+                mImpl.getView().setVisibility(VISIBLE);
+            }
+        });
     }
+
+    public void hide(){
+        post(new Runnable() {
+            @Override
+            public void run() {
+                mImpl.getView().setVisibility(GONE);
+            }
+        });
+    }
+
 
     public void takePicture() {
         mImpl.takePicture();
