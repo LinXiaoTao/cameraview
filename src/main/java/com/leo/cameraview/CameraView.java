@@ -217,6 +217,10 @@ public class CameraView extends FrameLayout {
         mImpl.stop();
     }
 
+    public void stopWithOutGone() {
+        mImpl.stop();
+    }
+
     public void takePicture() {
         mImpl.takePicture();
     }
