@@ -2,6 +2,7 @@ package com.leo.cameraview;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
 import android.view.Surface;
@@ -80,6 +81,11 @@ final class TextureViewPreview extends PreviewImpl {
     @Override
     Object getDisplaySurface() {
         return mTextureView.getSurfaceTexture();
+    }
+
+    @Override
+    Bitmap getBitmap() {
+        return mTextureView.getBitmap();
     }
 
     private void configureTransform() {

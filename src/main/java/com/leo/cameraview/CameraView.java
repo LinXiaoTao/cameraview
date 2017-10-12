@@ -2,6 +2,7 @@ package com.leo.cameraview;
 
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -58,6 +59,7 @@ public class CameraView extends FrameLayout {
     }
 
     private CameraViewImpl mImpl;
+    private PreviewImpl mPreview;
     private final CallbackBridge mCallbacks;
     private final DisplayOrientationDetector mDisplayOrientationDetector;
     private boolean mAdjustViewBounds;
@@ -80,8 +82,8 @@ public class CameraView extends FrameLayout {
         }
 
         mCallbacks = new CallbackBridge();
-        final PreviewImpl preview = createPreviewImpl(context);
-        mImpl = new Camera1(mCallbacks, preview);
+        mPreview = createPreviewImpl(context);
+        mImpl = new Camera1(mCallbacks, mPreview);
         mImpl.setDrawView(this);
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.CameraView, defStyle, 0);
@@ -201,7 +203,8 @@ public class CameraView extends FrameLayout {
         });
         if (!mImpl.start()) {
             Parcelable state = onSaveInstanceState();
-            mImpl = new Camera1(mCallbacks, createPreviewImpl(getContext()));
+            mPreview = createPreviewImpl(getContext());
+            mImpl = new Camera1(mCallbacks, mPreview);
             onRestoreInstanceState(state);
             mImpl.start();
         }
@@ -217,7 +220,7 @@ public class CameraView extends FrameLayout {
         mImpl.stop();
     }
 
-    public void show(){
+    public void show() {
         post(new Runnable() {
             @Override
             public void run() {
@@ -226,7 +229,7 @@ public class CameraView extends FrameLayout {
         });
     }
 
-    public void hide(){
+    public void hide() {
         post(new Runnable() {
             @Override
             public void run() {
@@ -235,6 +238,9 @@ public class CameraView extends FrameLayout {
         });
     }
 
+    public Bitmap getBitmap() {
+        return mPreview.getBitmap();
+    }
 
     public void takePicture() {
         mImpl.takePicture();

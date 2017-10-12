@@ -1,6 +1,7 @@
 package com.leo.cameraview;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.support.v4.view.ViewCompat;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -71,6 +72,15 @@ final class SurfaceViewPreview extends PreviewImpl {
     @Override
     Object getDisplaySurface() {
         return mSurfaceView.getHolder();
+    }
+
+    @Override
+    Bitmap getBitmap() {
+        mSurfaceView.setDrawingCacheEnabled(true);
+        mSurfaceView.buildDrawingCache(true);
+        Bitmap resultBitmap = Bitmap.createBitmap(mSurfaceView.getDrawingCache(true));
+        mSurfaceView.setDrawingCacheEnabled(false);
+        return resultBitmap;
     }
 
 

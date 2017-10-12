@@ -1,5 +1,6 @@
 package com.leo.cameraview;
 
+import android.graphics.Bitmap;
 import android.view.Surface;
 import android.view.View;
 
@@ -26,6 +27,8 @@ abstract class PreviewImpl {
     abstract boolean isReady();
 
     abstract Object getDisplaySurface();
+
+    abstract Bitmap getBitmap();
 
     PreviewImpl setCallback(Callback callback) {
         mCallback = callback;
