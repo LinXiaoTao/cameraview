@@ -63,6 +63,7 @@ public class CameraView extends FrameLayout {
     private final CallbackBridge mCallbacks;
     private final DisplayOrientationDetector mDisplayOrientationDetector;
     private boolean mAdjustViewBounds;
+    private int mPreViewIndex = -1;
 
     public CameraView(Context context) {
         this(context, null);
@@ -200,7 +201,11 @@ public class CameraView extends FrameLayout {
             public void run() {
                 setVisibility(VISIBLE);
                 if (indexOfChild(mPreview.getView()) == -1) {
-                    addView(mPreview.getView());
+                    if (mPreViewIndex > -1) {
+                        addView(mPreview.getView(), mPreViewIndex);
+                    } else {
+                        addView(mPreview.getView());
+                    }
                 }
             }
         });
@@ -219,6 +224,7 @@ public class CameraView extends FrameLayout {
             public void run() {
                 setVisibility(GONE);
                 if (indexOfChild(mPreview.getView()) > -1) {
+                    mPreViewIndex = indexOfChild(mPreview.getView());
                     removeView(mPreview.getView());
                 }
             }
