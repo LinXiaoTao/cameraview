@@ -199,6 +199,9 @@ public class CameraView extends FrameLayout {
             @Override
             public void run() {
                 setVisibility(VISIBLE);
+                if (indexOfChild(mPreview.getView()) == -1) {
+                    addView(mPreview.getView());
+                }
             }
         });
         if (!mImpl.start()) {
@@ -215,6 +218,9 @@ public class CameraView extends FrameLayout {
             @Override
             public void run() {
                 setVisibility(GONE);
+                if (indexOfChild(mPreview.getView()) > -1) {
+                    removeView(mPreview.getView());
+                }
             }
         });
         mImpl.stop();
