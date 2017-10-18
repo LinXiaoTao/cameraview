@@ -218,11 +218,18 @@ public class CameraView extends FrameLayout {
         }
     }
 
+
     public void stop() {
+        stop(true);
+    }
+
+    public void stop(final boolean gone) {
         post(new Runnable() {
             @Override
             public void run() {
-                setVisibility(GONE);
+                if (gone) {
+                    setVisibility(GONE);
+                }
                 if (indexOfChild(mPreview.getView()) > -1) {
                     mPreViewIndex = indexOfChild(mPreview.getView());
                     removeView(mPreview.getView());
