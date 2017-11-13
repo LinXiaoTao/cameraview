@@ -64,6 +64,7 @@ public class CameraView extends FrameLayout {
     private final DisplayOrientationDetector mDisplayOrientationDetector;
     private boolean mAdjustViewBounds;
     private int mPreViewIndex = -1;
+    private boolean mUseTextureViewPreview = false;
 
     public CameraView(Context context) {
         this(context, null);
@@ -182,17 +183,18 @@ public class CameraView extends FrameLayout {
         int width = getMeasuredWidth();
         int height = getMeasuredHeight();
         AspectRatio ratio = getAspectRatio();
-        if (mDisplayOrientationDetector.getLastKnownDisplayOrientation() % 180 == 0) {
-            ratio = ratio.inverse();
+        if (ratio != null) {
+            if (mDisplayOrientationDetector.getLastKnownDisplayOrientation() % 180 == 0) {
+                ratio = ratio.inverse();
+            }
+            if (height < width * ratio.getY() / ratio.getX()) {
+                mImpl.getView().measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+                        , MeasureSpec.makeMeasureSpec(width * ratio.getY() / ratio.getX(), MeasureSpec.EXACTLY));
+            } else {
+                mImpl.getView().measure(MeasureSpec.makeMeasureSpec(height * ratio.getX() / ratio.getY(), MeasureSpec.EXACTLY)
+                        , MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+            }
         }
-        if (height < width * ratio.getY() / ratio.getX()) {
-            mImpl.getView().measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
-                    , MeasureSpec.makeMeasureSpec(width * ratio.getY() / ratio.getX(), MeasureSpec.EXACTLY));
-        } else {
-            mImpl.getView().measure(MeasureSpec.makeMeasureSpec(height * ratio.getX() / ratio.getY(), MeasureSpec.EXACTLY)
-                    , MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
-        }
-
     }
 
     public void start() {
@@ -408,7 +410,7 @@ public class CameraView extends FrameLayout {
 
     private PreviewImpl createPreviewImpl(Context context) {
         PreviewImpl preview;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.ICE_CREAM_SANDWICH || !mUseTextureViewPreview) {
             preview = new SurfaceViewPreview(context, this);
         } else {
             preview = new TextureViewPreview(context, this);
